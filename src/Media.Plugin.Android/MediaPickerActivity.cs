@@ -174,6 +174,26 @@ namespace Plugin.Media
             File.Create(GetLocalPath(this.path)).Close();
         }
 
+        private void DeleteOutputFile()
+        {
+            try
+            {
+                if (this.path?.Scheme != "file")
+                    return;
+
+                var localPath = GetLocalPath(this.path);
+
+                if (File.Exists(localPath))
+                {
+                    File.Delete(localPath);
+                }
+            }
+            catch(Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Unable to delete file: " + ex.Message);
+            }
+        }
+
         internal static Task<MediaPickedEventArgs> GetMediaFileAsync(Context context, int requestCode, string action, bool isPhoto, ref Uri path, Uri data, bool saveToAlbum)
         {
             Task<Tuple<string, bool>> pathFuture;
@@ -229,14 +249,17 @@ namespace Plugin.Media
                                   File.Delete(t.Result.Item1);
                                   // We don't really care if this explodes for a normal IO reason.
                               }
-                              catch (UnauthorizedAccessException)
+                              catch (UnauthorizedAccessException uac)
                               {
+                                System.Diagnostics.Debug.WriteLine("Unable to delete file, unauthorized " + uac.Message);
                               }
-                              catch (DirectoryNotFoundException)
+                              catch (DirectoryNotFoundException dnfe)
                               {
+                                System.Diagnostics.Debug.WriteLine("Unable to delete file, not found: " + dnfe.Message);
                               }
-                              catch (IOException)
+                              catch (IOException ioe)
                               {
+                                System.Diagnostics.Debug.WriteLine("Unable to delete file, io exception: " + ioe.Message);
                               }
                           }
                       }, albumPath: aPath);
@@ -267,6 +290,9 @@ namespace Plugin.Media
 
                 if (resultCode == Result.Canceled)
                 {
+                    //delete empty file
+                    DeleteOutputFile();
+
                     future = TaskFromResult(new MediaPickedEventArgs(requestCode, isCanceled: true));
 
                     Finish();
@@ -294,7 +320,12 @@ namespace Plugin.Media
             else
             {
                 if (resultCode == Result.Canceled)
+                {
+                    //delete empty file
+                    DeleteOutputFile();
+
                     SetResult(Result.Canceled);
+                }
                 else
                 {
                     Intent resultData = new Intent();
